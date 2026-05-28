@@ -1,0 +1,46 @@
+name: PromptCI — Prompt regression testing
+
+on:
+  pull_request:
+    paths:
+      - "prompts/**"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    name: Analyze prompt changes
+
+    steps:
+      - name: Run PromptCI analysis
+        id: promptci
+        run: |
+          echo "Triggering PromptCI pipeline..."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.PROMPTCI_URL }}/webhook" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: pull_request" \
+            -d '{
+              "action": "opened",
+              "pull_request": {
+                "number": ${{ github.event.pull_request.number }},
+                "html_url": "${{ github.event.pull_request.html_url }}"
+              },
+              "repository": {
+                "full_name": "${{ github.repository }}"
+              }
+            }')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "PromptCI pipeline failed to trigger"
+            exit 1
+          fi
+
+          echo "PromptCI analysis triggered successfully"
+          echo "Report will appear as a PR comment shortly"
